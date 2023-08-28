@@ -3,7 +3,6 @@ import numpy as np
 import neurokit2 as nk
 import heartpy as hp
 import matplotlib.pyplot as plt
-import numpy as np
 from scipy.interpolate import CubicSpline
 
 path = '/home/dhz/MTVital/MTHS/Data/signal_'
@@ -64,11 +63,27 @@ def cubic_transform(seq, new_length):
 
     return new_seq
 
+def normalization(data):
+    """
+    归一化函数
+    把所有数据归一化到[0，1]区间内，数据列表中的最大值和最小值分别映射到1和0，所以该方法一定会出现端点值0和1。
+    此映射是线性映射，实质上是数据在数轴上等比缩放。
+    
+    :param data: 数据列表，数据取值范围：全体实数
+    :return:
+    """
+    min_value = min(data)
+    max_value = max(data)
+    new_list = []
+    for i in data:
+        new_list.append((i-min_value) / (max_value-min_value))
+    return new_list
+
 class Process(object):
     def __init__(self, num):
         self.num = num
     
-    def prepro(self, length, piece):
+    def prepro(self, length, piece, items):
         sig = np.load(path + '{0:0=d}'.format(self.num) + '.npy')
         sim = np.mean(sig, axis=1)
         self.filtered = hp.filter_signal(sim, [0.7, 3.5], sample_rate=30.0, order=3, filtertype='bandpass')
@@ -76,17 +91,19 @@ class Process(object):
         masks = wd['RR_masklist']
         self.peak_list = wd['peaklist']
         self.peak_list = list(map(int, self.peak_list))
-        ind = self.auth_index(masks, piece)
-        start = self.peak_list[ind]
-        end = self.peak_list[ind + piece]
-        sub = self.filtered[start : end]
-        sub_al = cubic_transform(sub, length)
+        ind = self.auth_index(masks, piece, items)
+        sub_al = []
+        for i in range(items):
+            start = self.peak_list[ind + i]
+            end = self.peak_list[ind + i + piece]
+            sub = self.filtered[start : end]
+            sub_al.append(normalization(cubic_transform(sub, length)))
         return sub_al
     
-    def auth_index(self, ma, step):
+    def auth_index(self, ma, step, items):
         for i in range(len(ma)):
             if ma[i] == 0:
-                for j in range(step):
+                for j in range(step + items - 1):
                     if j == step - 1 and ma[i + j] == 0:
                         return i
                     elif ma[i + j] == 0:
